@@ -45,9 +45,9 @@ local webhookURL = nil
 --// UI Setup
 
 local window = Rayfield:CreateWindow({
-    Name = "Haven//O",
+    Name = "Haven/O",
     Icon = 0,
-    LoadingTitle = "Haven//Optimized",
+    LoadingTitle = "Haven/Optimized",
     LoadingSubtitle = "Rayfield Interface by Sirius",
     Theme = "Default",
     DisableRayfieldPrompts = true,
@@ -80,7 +80,7 @@ local function sendToDiscord(playerName, playerLife, itemName, tier)
                 }
             ],
             "footer": {
-                "text": "H//O"
+                "text": "H/O"
             },
             "timestamp": "%s"
         }]
@@ -274,7 +274,7 @@ local wbhURL = webhookTab:CreateInput({
 
 local wbhGuide = webhookTab:CreateParagraph({
     Title = "Guide",
-    Content = "Setting a webhook URL will enable Shiny tracking.\nPressing Test Webhook will send a example embed."
+    Content = "Setting a Webhook URL will enable Shiny tracking.\nPressing Test Webhook will send a example embed."
 })
 
 --// Misc Tab Elements
@@ -315,6 +315,13 @@ miscTab:CreateToggle({
         collectBox = value
     end
 })
+
+local vu = game:GetService("VirtualUser")
+game:GetService("Players").LocalPlayer.Idled:Connect(function()
+    vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    task.wait(1)
+    vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+end)
 
 --// Event Connections
 
