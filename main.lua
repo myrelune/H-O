@@ -272,6 +272,11 @@ local wbhURL = webhookTab:CreateInput({
     end
 })
 
+local wbhGuide = webhookTab:CreateParagraph({
+    Title = "Guide",
+    Content = "Setting a webhook URL will enable Shiny tracking.\nPressing Test Webhook will send a example embed."
+})
+
 --// Misc Tab Elements
 
 miscTab:CreateKeybind({
