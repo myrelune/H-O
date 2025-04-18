@@ -4,33 +4,46 @@
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
+
 --// Services
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
-local UserInputService = game:GetService("UserInputService")
+local MoneyLib = require(ReplicatedStorage:WaitForChild("MoneyLib"))
 
 --// Player Info
+
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 local humanoid = character:WaitForChild("Humanoid")
 
 --// Game Remotes
+
 local rebirthRemote = ReplicatedStorage:WaitForChild("Rebirth")
 local layoutsRemote = ReplicatedStorage:WaitForChild("Layouts")
 
---// Leaderstats
+--// Player Values
+
 local leaderstats = player:WaitForChild("leaderstats")
-local cashValue = leaderstats:WaitForChild("Cash")
+local life = leaderstats:WaitForChild("Life").Value
+local cashValue = player:WaitForChild("PlayerGui").GUI.Money
+local playerSettings = player:WaitForChild("PlayerSettings")
 
 --// Script State
+
 local rebirthEnabled = false
 local layout = nil
 local collectBox = false
 local isRebirthing = false
 
+--// Extra
+
+local webhookURL = nil
+
 --// UI Setup
+
 local window = Rayfield:CreateWindow({
     Name = "Haven//O",
     Icon = 0,
@@ -40,16 +53,54 @@ local window = Rayfield:CreateWindow({
     DisableRayfieldPrompts = true,
     DisableBuildWarnings = false,
     ConfigurationSaving = {
-        Enabled = false,
+        Enabled = true,
         FolderName = "Miner's Haven",
         FileName = "Settings"
     }
 })
 
 local mainTab = window:CreateTab("Main")
+local webhookTab = window:CreateTab("Webhook")
 local miscTab = window:CreateTab("Misc")
 
 --// Utility Functions
+
+local function sendToDiscord(playerName, playerLife, itemName, tier)
+    local payload = string.format([[
+    {
+        "embeds": [{
+            "title": "🎉 ||%s||  -  (Life %s)",
+            "description": "A shiny reborn has been obtained!",
+            "color": 16753920,
+            "fields": [
+                {
+                    "name": "%s",
+                    "value": "%s",
+                    "inline": false
+                }
+            ],
+            "footer": {
+                "text": "H//O"
+            },
+            "timestamp": "%s"
+        }]
+    }
+    ]],
+    playerName, playerLife, -- title
+    tier, itemName,         -- field name & value
+    os.date("!%Y-%m-%dT%H:%M:%SZ") -- timestamp (UTC)
+    )
+
+    local response = request({
+        Url=webhookURL,
+        Method="POST",
+        Headers = {
+            ["Content-Type"] = "application/json"
+        },
+        Body=payload})
+    print("[Embed sent to Discord] " .. response.Body)
+end
+
 local function getPlayerTycoon()
     local tycoons = Workspace:WaitForChild("Tycoons")
     for _, v in pairs(tycoons:GetDescendants()) do
@@ -91,10 +142,11 @@ local function tryRebirth()
     isRebirthing = true
 
     print("Attempting rebirth...")
+    task.wait(math.random(0.3, 0.7)/10)
     rebirthRemote:InvokeServer()
-    task.wait(0.5)
+    task.wait(math.random(2,5)/10)
     safeLoadLayout()
-    task.wait(0.5)
+    task.wait(math.random(1,3)/10)
 
     isRebirthing = false
 end
@@ -102,18 +154,23 @@ end
 local function onCashChanged()
     if not rebirthEnabled then return end
 
-    local tycoon = getPlayerTycoon()
-    if not tycoon then
-        warn("Could not find player's tycoon.")
-        return
-    end
+    local skipEnabled = playerSettings:WaitForChild("LifeSkip")
+    local maxSkips = player:WaitForChild("MaxLivesSkipped").Value
 
-    if #tycoon:GetChildren() == 5 then
-        safeLoadLayout()
-    end
+    local skipCost = MoneyLib.CalculateLifeSkips(player, maxSkips)
 
-    if cashValue.Value == "$inf" then
+    if cashValue.Value == "inf" then
         tryRebirth()
+    end
+
+    if skipEnabled then
+        if cashValue.Value >= skipCost then
+            tryRebirth()
+        end
+    else
+        if cashValue.Value >= MoneyLib.RebornPrice(player) then
+            tryRebirth()
+        end
     end
 end
 
@@ -123,8 +180,9 @@ local function listenForRebirthRewards()
     rewardFolder.ChildAdded:Connect(function(child)
         if child.Name == "ItemTemplate" or child.Name == "ItemTemplateMini" then
             local title = child:FindFirstChild("Title")
-            if title and title:IsA("TextLabel") and not string.find(title.Text, "Basic Iron Mine") then
-                print("Rebirth Reward: " .. title.Text)
+            local tier = child:FindFirstChild("Tier")
+            if title and title:IsA("TextLabel") and string.find(tier.Text, "Shiny") and webhookURL ~= nil then
+                sendToDiscord(player.Name, life, title.Text, tier.Text)
             end
         end
     end)
@@ -140,6 +198,7 @@ local function onBoxSpawned(box)
 end
 
 --// Main Tab Elements
+
 mainTab:CreateToggle({
     Name = "Auto Rebirth",
     CurrentValue = false,
@@ -172,6 +231,7 @@ mainTab:CreateButton({
     Callback = function()
         ReplicatedStorage:WaitForChild("RedeemFreeBox"):FireServer()
         ReplicatedStorage:WaitForChild("RewardReady"):FireServer(false)
+        task.wait(1)
 
         local prompt = Workspace.Map.Fargield.Internal.ProximityPrompt
         local tempPos = humanoidRootPart.CFrame
@@ -184,7 +244,36 @@ mainTab:CreateButton({
     end
 })
 
+--// Webhook Tab Elements
+
+local wbhURL = webhookTab:CreateInput({
+    Name = "Webhook URL",
+    CurrentValue = "",
+    PlaceholderText = "https://discord.com/api/webhooks/...",
+    RemoveTextAfterFocusLost = true,
+    Flag = "wbhURL",
+    Callback = function(Text)
+        webhookURL = Text
+    end,
+ })
+
+ local TestWebhook = webhookTab:CreateButton({
+    Name = "Test Webhook",
+    Callback = function()
+        if webhookURL == nil then
+            return Rayfield:Notify({
+                Title = "Webhook Fail!",
+                Content = "There was no webhook URL provided.",
+                Duration = 3,
+                Image = "octagon-alert",
+            })
+        end
+        sendToDiscord("TestUser", "S+1,000,000", "⭐ Paranormal Tesla Resetter ⭐", "Shiny Reborn")
+    end
+})
+
 --// Misc Tab Elements
+
 miscTab:CreateKeybind({
     Name = "Teleport to Base",
     CurrentKeybind = "V",
@@ -223,7 +312,9 @@ miscTab:CreateToggle({
 })
 
 --// Event Connections
+
 listenForRebirthRewards()
 cashValue.Changed:Connect(onCashChanged)
 Workspace.Boxes.ChildAdded:Connect(onBoxSpawned)
 onCashChanged()
+Rayfield:LoadConfiguration()
