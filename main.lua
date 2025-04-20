@@ -34,8 +34,10 @@ local playerSettings = player:WaitForChild("PlayerSettings")
 --// Script State
 
 local rebirthEnabled = false
-local layout = nil
 local collectBox = false
+local layout = nil
+local availableMystery = {"None"}
+local openingMystery = false
 
 --// Extra
 
@@ -221,6 +223,33 @@ local function onBoxSpawned(box)
     end
 end
 
+task.spawn(function()
+    local header = player:WaitForChild("PlayerGui"):WaitForChild("GUI"):WaitForChild("Boxes"):WaitForChild("Header")
+
+    for _, child in ipairs(header:GetChildren()) do
+        if child:IsA("Frame") and child.Visible then
+            table.insert(availableMystery, child.Name)
+        end
+    end
+
+    print("Available mystery boxes:", table.concat(availableMystery, ", "))
+end)
+
+local function openMystery(mystery)
+    if mystery then
+        Rayfield:Notify({
+            Title = "Opening Boxes!",
+            Content = "Now opening " .. mystery .. "!\nSelect None to stop.",
+            Duration = 3,
+            Image = "package-open"
+        })
+        while openingMystery do
+            task.wait(1)
+            game:GetService("ReplicatedStorage"):WaitForChild("MysteryBox"):InvokeServer(mystery)
+        end
+    end
+end
+
 --// Main Tab Elements
 
 mainTab:CreateToggle({
@@ -247,6 +276,8 @@ mainTab:CreateDropdown({
 })
 
 mainTab:CreateDivider()
+
+--game:GetService("ReplicatedStorage"):WaitForChild("MysteryBox"):InvokeServer(box)
 
 mainTab:CreateButton({
     Name = "Claim Dailies",
@@ -311,7 +342,7 @@ local wbhURL = webhookTab:CreateInput({
 
         sendWebhook({
             title = "Webhook Test",
-            description = "This is a test embed sent from Haven/O.",
+            description = "This is a test embed sent from H/O.",
             color = 5763719,
             fields = {
                 { name = "Webhook Status", value = "Active", inline = false },
@@ -357,6 +388,23 @@ miscTab:CreateToggle({
     Flag = "Boxes",
     Callback = function(value)
         collectBox = value
+    end
+})
+
+miscTab:CreateDropdown({
+    Name = "Open Mystery Boxes",
+    Options = availableMystery,
+    CurrentOption = {"None"},
+    MultipleOptions = false,
+    Flag = "MysteryDropdown",
+    Callback = function(Options)
+        if Options[1] == "None" then
+            openingMystery = false
+            return
+        else
+            openingMystery = true
+            openMystery(Options[1])
+        end
     end
 })
 
