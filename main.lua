@@ -15,9 +15,25 @@ local MoneyLib = require(ReplicatedStorage:WaitForChild("MoneyLib"))
 --// Player Info
 
 local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-local humanoid = character:WaitForChild("Humanoid")
+local character, humanoid, humanoidRootPart
+
+local function updateCharacter(char)
+    character = char
+    humanoid = character:WaitForChild("Humanoid")
+    humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+end
+
+--// Initial character
+
+if player.Character then
+    updateCharacter(player.Character)
+end
+
+--// Handle respawn
+
+player.CharacterAdded:Connect(function(char)
+    updateCharacter(char)
+end)
 
 --// Game Remotes
 
@@ -27,7 +43,7 @@ local layoutsRemote = ReplicatedStorage:WaitForChild("Layouts")
 --// Player Values
 
 local leaderstats = player:WaitForChild("leaderstats")
-local life = leaderstats:WaitForChild("Life").Value
+local life = leaderstats:WaitForChild("Life")
 local cashValue = player:WaitForChild("PlayerGui").GUI.Money
 local playerSettings = player:WaitForChild("PlayerSettings")
 
@@ -187,7 +203,7 @@ local function onCashChanged()
         tryRebirth()
     end
 
-    if skipEnabled then
+    if skipEnabled.Value then
         if cashValue.Value >= skipCost then
             tryRebirth()
         end
@@ -208,7 +224,7 @@ local function listenForRebirthRewards()
 
             if string.find(tier.Text, "Shiny") and webhook.shiny then
                 sendWebhook({
-                    title = "||" .. player.DisplayName .. "||  -  (Life " .. life .. ")",
+                    title = "||" .. player.DisplayName .. "||  -  (Life " .. life.Value .. ")",
                     description = "A " .. tier.Text .. "has been obtained!",
                     fields = {
                         {name = "Item", value = title.Text, inline = false}
@@ -283,8 +299,6 @@ mainTab:CreateDropdown({
 })
 
 mainTab:CreateDivider()
-
---game:GetService("ReplicatedStorage"):WaitForChild("MysteryBox"):InvokeServer(box)
 
 mainTab:CreateButton({
     Name = "Claim Dailies",
@@ -422,8 +436,9 @@ end
 --// Event Connections
 
 listenForRebirthRewards()
-cashValue.Changed:Connect(onCashChanged)
-Workspace.Boxes.ChildAdded:Connect(onBoxSpawned)
 onCashChanged()
 initLayout()
+cashValue.Changed:Connect(onCashChanged)
+Workspace.Boxes.ChildAdded:Connect(onBoxSpawned)
+
 Rayfield:LoadConfiguration()
