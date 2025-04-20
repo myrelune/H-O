@@ -36,11 +36,10 @@ local playerSettings = player:WaitForChild("PlayerSettings")
 local rebirthEnabled = false
 local layout = nil
 local collectBox = false
-local isRebirthing = false
 
 --// Extra
 
-local webhookURL = nil
+local webhook = {url = nil, shiny = false, stats = false}
 
 --// UI Setup
 
@@ -65,40 +64,46 @@ local miscTab = window:CreateTab("Misc")
 
 --// Utility Functions
 
-local function sendToDiscord(playerName, playerLife, itemName, tier)
-    local payload = string.format([[
-    {
-        "embeds": [{
-            "title": "🎉 ||%s||  -  (Life %s)",
-            "description": "A shiny reborn has been obtained!",
-            "color": 16753920,
-            "fields": [
-                {
-                    "name": "%s",
-                    "value": "%s",
-                    "inline": false
-                }
-            ],
-            "footer": {
-                "text": "H/O"
-            },
-            "timestamp": "%s"
-        }]
-    }
-    ]],
-    playerName, playerLife, -- title
-    tier, itemName,         -- field name & value
-    os.date("!%Y-%m-%dT%H:%M:%SZ") -- timestamp (UTC)
-    )
+local function sendWebhook(data)
+    if not webhook.url or webhook.url == "" then
+        return warn("[Webhook] No webhook URL")
+    end
 
-    local response = request({
-        Url=webhookURL,
-        Method="POST",
-        Headers = {
-            ["Content-Type"] = "application/json"
-        },
-        Body=payload})
-    print("[Embed sent to Discord] " .. response.Body)
+    --// Default Values
+    data.title = data.title or "H/O Notification"
+    data.description = data.description or ""
+    data.color = data.color or 16753920
+    data.fields = data.fields or {}
+
+    local payload = {
+        ["embeds"] = {{
+            ["title"] = data.title,
+            ["description"] = data.description,
+            ["color"] = data.color,
+            ["fields"] = data.fields,
+            ["footer"] = {
+                ["text"] = data.footer or "H/O"
+            },
+            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    }
+
+    local success, response = pcall(function()
+        return request({
+            Url = webhook.url,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+            Body = game:GetService("HttpService"):JSONEncode(payload)
+        })
+    end)
+
+    if success then
+        print("[Webhook] Sent!")
+    else
+        warn("[Webhook] Error: ", response)
+    end
 end
 
 local function getPlayerTycoon()
@@ -138,17 +143,18 @@ local function safeLoadLayout(attempts)
 end
 
 local function tryRebirth()
-    if isRebirthing or not rebirthEnabled then return end
-    isRebirthing = true
+    if not rebirthEnabled then return end
 
-    print("Attempting rebirth...")
-    task.wait(math.random(0.3, 0.7)/10)
+    task.wait(math.random(3,7)/10)
     rebirthRemote:InvokeServer()
-    task.wait(math.random(2,5)/10)
-    safeLoadLayout()
-    task.wait(math.random(1,3)/10)
+end
 
-    isRebirthing = false
+local function initLayout()
+    local tycoonState = getPlayerTycoon()
+    local count = #tycoonState:GetChildren()
+    if rebirthEnabled and layout ~= nil and count == 5 then
+        safeLoadLayout(1)
+    end
 end
 
 local function onCashChanged()
@@ -181,8 +187,17 @@ local function listenForRebirthRewards()
         if child.Name == "ItemTemplate" or child.Name == "ItemTemplateMini" then
             local title = child:FindFirstChild("Title")
             local tier = child:FindFirstChild("Tier")
-            if title and title:IsA("TextLabel") and string.find(tier.Text, "Shiny") and webhookURL ~= nil then
-                sendToDiscord(player.Name, life, title.Text, tier.Text)
+
+            if string.find(tier.Text, "Shiny") and webhook.shiny then
+                sendWebhook({
+                    title = "||" .. player.DisplayName .. "||  -  (Life " .. life .. ")",
+                    description = "A " .. tier.Text .. "has been obtained!",
+                    fields = {
+                        {name = "Item", value = title.Text, inline = false}
+                    }
+                })
+            elseif webhook.stats then
+                print("stats")
             end
         end
     end)
@@ -205,23 +220,20 @@ mainTab:CreateToggle({
     Flag = "Rebirth",
     Callback = function(value)
         rebirthEnabled = value
+        initLayout()
     end
 })
 
-mainTab:CreateInput({
+mainTab:CreateDropdown({
     Name = "Load Layout",
-    CurrentValue = "",
-    PlaceholderText = "Layout to load (1-3)",
-    RemoveTextAfterFocusLost = false,
-    Flag = "Layout",
-    Callback = function(text)
-        layout = text
+    Options = {"1", "2", "3"},
+    CurrentOption = {"1"},
+    MultipleOptions = false,
+    Flag = "LayoutDrop",
+    Callback = function(Options)
+        layout = Options
+        initLayout()
     end
-})
-
-mainTab:CreateParagraph({
-    Title = "Guide",
-    Content = "Enter the number of the layout you want to load and enable Auto Rebirth, load the layout manually once and it will begin to work."
 })
 
 mainTab:CreateDivider()
@@ -231,7 +243,7 @@ mainTab:CreateButton({
     Callback = function()
         ReplicatedStorage:WaitForChild("RedeemFreeBox"):FireServer()
         ReplicatedStorage:WaitForChild("RewardReady"):FireServer(false)
-        task.wait(1)
+        task.wait(0.3)
 
         local prompt = Workspace.Map.Fargield.Internal.ProximityPrompt
         local tempPos = humanoidRootPart.CFrame
@@ -239,7 +251,7 @@ mainTab:CreateButton({
         humanoidRootPart.CFrame = prompt.Parent.CFrame + Vector3.new(0, 5, 0)
         task.wait(0.5)
         fireproximityprompt(prompt)
-        task.wait(1)
+        task.wait(0.5)
         humanoidRootPart.CFrame = tempPos
     end
 })
@@ -253,14 +265,14 @@ local wbhURL = webhookTab:CreateInput({
     RemoveTextAfterFocusLost = true,
     Flag = "wbhURL",
     Callback = function(Text)
-        webhookURL = Text
+        webhook.url = Text
     end,
  })
 
  local TestWebhook = webhookTab:CreateButton({
     Name = "Test Webhook",
     Callback = function()
-        if webhookURL == nil then
+        if not webhook.url or webhook.url == "" then
             return Rayfield:Notify({
                 Title = "Webhook Fail!",
                 Content = "There was no webhook URL provided.",
@@ -268,13 +280,18 @@ local wbhURL = webhookTab:CreateInput({
                 Image = "octagon-alert",
             })
         end
-        sendToDiscord("TestUser", "S+1,000,000", "⭐ Paranormal Tesla Resetter ⭐", "Shiny Reborn")
-    end
-})
 
-local wbhGuide = webhookTab:CreateParagraph({
-    Title = "Guide",
-    Content = "Setting a Webhook URL will enable Shiny tracking.\nPressing Test Webhook will send a example embed."
+        sendWebhook({
+            title = "Webhook Test",
+            description = "This is a test embed sent from Haven/O.",
+            color = 5763719,
+            fields = {
+                { name = "Webhook Status", value = "Active", inline = true },
+                { name = "Time", value = os.date("%I:%M %p"), inline = true }
+            },
+            footer = "H/O Webhook"
+        })
+    end
 })
 
 --// Misc Tab Elements
@@ -329,4 +346,5 @@ listenForRebirthRewards()
 cashValue.Changed:Connect(onCashChanged)
 Workspace.Boxes.ChildAdded:Connect(onBoxSpawned)
 onCashChanged()
+initLayout()
 Rayfield:LoadConfiguration()
