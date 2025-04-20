@@ -51,10 +51,17 @@ local window = Rayfield:CreateWindow({
     Theme = "Default",
     DisableRayfieldPrompts = true,
     DisableBuildWarnings = false,
+
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "Miner's Haven",
         FileName = "Settings"
+    },
+
+    Discord = {
+        Enabled = true,
+        Invite = "UwvTm57q",
+        RememberJoins = true
     }
 })
 
@@ -143,17 +150,19 @@ local function safeLoadLayout(attempts)
 end
 
 local function tryRebirth()
-    if not rebirthEnabled then return end
+    if not rebirthEnabled and layout == nil then return end
 
     task.wait(math.random(3,7)/10)
     rebirthRemote:InvokeServer()
+    task.wait(math.random(2,5)/10)
+    safeLoadLayout()
 end
 
 local function initLayout()
     local tycoonState = getPlayerTycoon()
     local count = #tycoonState:GetChildren()
     if rebirthEnabled and layout ~= nil and count == 5 then
-        safeLoadLayout(1)
+        safeLoadLayout()
     end
 end
 
@@ -221,6 +230,7 @@ mainTab:CreateToggle({
     Callback = function(value)
         rebirthEnabled = value
         initLayout()
+        tryRebirth()
     end
 })
 
@@ -231,7 +241,7 @@ mainTab:CreateDropdown({
     MultipleOptions = false,
     Flag = "LayoutDrop",
     Callback = function(Options)
-        layout = Options
+        layout = Options[1]
         initLayout()
     end
 })
@@ -269,6 +279,24 @@ local wbhURL = webhookTab:CreateInput({
     end,
  })
 
+ local wbhShiny = webhookTab:CreateToggle({
+    Name = "Track Shinies",
+    CurrentValue = false,
+    Flag = "ShinyTracker",
+    Callback = function(Value)
+        webhook.shiny = Value
+    end
+ })
+
+ local wbhStats = webhookTab:CreateToggle({
+    Name = "Stat Summary",
+    CurrentValue = false,
+    Flag = "StatSummary",
+    Callback = function(Value)
+        webhook.stats = Value
+    end
+ })
+
  local TestWebhook = webhookTab:CreateButton({
     Name = "Test Webhook",
     Callback = function()
@@ -286,8 +314,7 @@ local wbhURL = webhookTab:CreateInput({
             description = "This is a test embed sent from Haven/O.",
             color = 5763719,
             fields = {
-                { name = "Webhook Status", value = "Active", inline = true },
-                { name = "Time", value = os.date("%I:%M %p"), inline = true }
+                { name = "Webhook Status", value = "Active", inline = false },
             },
             footer = "H/O Webhook"
         })
