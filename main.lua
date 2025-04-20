@@ -31,17 +31,24 @@ local life = leaderstats:WaitForChild("Life").Value
 local cashValue = player:WaitForChild("PlayerGui").GUI.Money
 local playerSettings = player:WaitForChild("PlayerSettings")
 
---// Script State
-
-local rebirthEnabled = false
-local collectBox = false
-local layout = nil
-local availableMystery = {"None"}
-local openingMystery = false
-
 --// Extra
 
-local webhook = {url = nil, shiny = false, stats = false}
+local state = {
+    rebirthEnabled = false,
+    collectBox = false,
+    openingMystery = false,
+    layout = nil
+}
+
+local webhook = {
+    url = nil,
+    shiny = false,
+    stats = false
+}
+
+local availableMystery = {
+    "None",
+}
 
 --// UI Setup
 
@@ -136,7 +143,7 @@ local function safeLoadLayout(attempts)
     local before = #tycoon:GetChildren()
 
     print("Loading layout attempt #" .. attempts)
-    layoutsRemote:InvokeServer("Load", "Layout" .. layout)
+    layoutsRemote:InvokeServer("Load", "Layout" .. state.layout)
 
     task.delay(2, function()
         local after = #tycoon:GetChildren()
@@ -152,7 +159,7 @@ local function safeLoadLayout(attempts)
 end
 
 local function tryRebirth()
-    if not rebirthEnabled and layout == nil then return end
+    if not state.rebirthEnabled and state.layout == nil then return end
 
     task.wait(math.random(3,7)/10)
     rebirthRemote:InvokeServer()
@@ -163,13 +170,13 @@ end
 local function initLayout()
     local tycoonState = getPlayerTycoon()
     local count = #tycoonState:GetChildren()
-    if rebirthEnabled and layout ~= nil and count == 5 then
+    if state.rebirthEnabled and state.layout ~= nil and count == 5 then
         safeLoadLayout()
     end
 end
 
 local function onCashChanged()
-    if not rebirthEnabled then return end
+    if not state.rebirthEnabled then return end
 
     local skipEnabled = playerSettings:WaitForChild("LifeSkip")
     local maxSkips = player:WaitForChild("MaxLivesSkipped").Value
@@ -215,7 +222,7 @@ local function listenForRebirthRewards()
 end
 
 local function onBoxSpawned(box)
-    if collectBox and box:IsA("BasePart") then
+    if state.collectBox and box:IsA("BasePart") then
         local tempPos = humanoidRootPart.CFrame
         humanoidRootPart.CFrame = box.CFrame
         task.wait(0.2)
@@ -243,7 +250,7 @@ local function openMystery(mystery)
             Duration = 3,
             Image = "package-open"
         })
-        while openingMystery do
+        while state.openingMystery do
             task.wait(1)
             game:GetService("ReplicatedStorage"):WaitForChild("MysteryBox"):InvokeServer(mystery)
         end
@@ -257,7 +264,7 @@ mainTab:CreateToggle({
     CurrentValue = false,
     Flag = "Rebirth",
     Callback = function(value)
-        rebirthEnabled = value
+        state.rebirthEnabled = value
         initLayout()
         tryRebirth()
     end
@@ -270,7 +277,7 @@ mainTab:CreateDropdown({
     MultipleOptions = false,
     Flag = "LayoutDrop",
     Callback = function(Options)
-        layout = Options[1]
+        state.layout = Options[1]
         initLayout()
     end
 })
@@ -387,7 +394,7 @@ miscTab:CreateToggle({
     CurrentValue = false,
     Flag = "Boxes",
     Callback = function(value)
-        collectBox = value
+        state.collectBox = value
     end
 })
 
@@ -399,21 +406,18 @@ miscTab:CreateDropdown({
     Flag = "MysteryDropdown",
     Callback = function(Options)
         if Options[1] == "None" then
-            openingMystery = false
+            state.openingMystery = false
             return
         else
-            openingMystery = true
+            state.openingMystery = true
             openMystery(Options[1])
         end
     end
 })
 
-local vu = game:GetService("VirtualUser")
-game:GetService("Players").LocalPlayer.Idled:Connect(function()
-    vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-    task.wait(1)
-    vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-end)
+for _, connection in pairs(getconnections(game:GetService("Players").LocalPlayer.Idled)) do
+    connection:Disable()
+end
 
 --// Event Connections
 
