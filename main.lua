@@ -225,7 +225,7 @@ local function listenForRebirthRewards()
             if string.find(tier.Text, "Shiny") and webhook.shiny then
                 sendWebhook({
                     title = "||" .. player.DisplayName .. "||  -  (Life " .. life.Value .. ")",
-                    description = "A " .. tier.Text .. "has been obtained!",
+                    description = "A " .. tier.Text .. " has been obtained!",
                     fields = {
                         {name = "Item", value = title.Text, inline = false}
                     }
